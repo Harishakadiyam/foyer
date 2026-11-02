@@ -1,91 +1,82 @@
+# Insurance Claim Coverage Checker
 
-# Insurance Policy RAG Assistant
+Describe a home insurance claim and the app decides, from the policy wording alone, whether it is
+**COVERED**, **NOT COVERED** or **UNCLEAR**. Every answer quotes the clauses it relies on, with page numbers.
 
-## About the Project
+The verdict matters less than the justification. When the policy is ambiguous, or the claim leaves out a
+fact the policy depends on, the app answers UNCLEAR and says what information would settle it.
+A substantiated "I don't know" is more useful than a confident answer without sources.
 
-I built this project to understand how RAG (Retrieval-Augmented Generation) can be used to get answers from insurance policy documents.
+**Live demo:** [add your Streamlit link here]
 
-The idea is simple: instead of reading a complete PDF to find a specific policy detail, a user can upload the PDF, ask a question, and get an answer based on the document.
+## Test cases
 
-I am using a sample home insurance policy to test the application.
+The app is tested on a real, publicly published policy:
+[RSA Home Contents Insurance policy wording (UK, 2025)](https://static.rsagroup.com/rsa/tenants-contents-insurance/NHC-wording.pdf).
+The PDF is downloaded from the insurer's site on first run and is not stored in this repository.
 
-## What I Have Implemented
+| Claim | Verdict | Why |
+|---|---|---|
+| My bike was stolen from the building's communal storage area, which wasn't locked. | UNCLEAR | Optional bicycle cover (p. 46) only covers theft in a public place if the bike was locked to something fixed. The policy doesn't define "public place", and a shared storage room isn't clearly part of "home" as defined on p. 11, which decides whether the main theft cover (p. 25) applies. |
+| A candle left on the garden table during a holiday melted in the heat and damaged the table. | UNCLEAR | Only accidental damage cover could apply, and it requires the optional Simple+ cover in the schedule (p. 42). "Contents in the open" (p. 28) doesn't cover heat damage. Whether melting counts as "sudden" accidental damage (p. 9) or gradual damage is debatable. |
 
-- Upload insurance policy PDFs using Streamlit.
-- Extract text from PDFs using `pdfplumber`.
-- Extract tables and convert the rows into readable text.
-- Combine the extracted text and table content.
-- Keep the PDF filename and page number for reference.
-- Split the document into smaller chunks.
-- Generate embeddings using Hugging Face sentence transformers.
-- Store and search the embeddings using FAISS.
-- Use Google Gemini to generate answers from the retrieved content.
-- Display the answer along with the source document and page number.
+## What I learned while testing
 
-## Tools and Technologies
+- The policy prints cover and exclusions in two columns. Plain text extraction mixed them, so I extract each table row as one clause.
+- An early version applied an exclusion for credit cards (p. 40) to the bike claim. I now label every exclusion with the cover item it belongs to, and rewrite each claim into policy wording before searching so the right base cover is found.
 
-- Python
-- Streamlit
-- LangChain
-- pdfplumber
-- Hugging Face Sentence Transformers
-- FAISS
-- Google Gemini API
+## How it works
 
-## How the Application Works
+1. **Parsing that keeps clauses intact.** Like many policies, this one prints "What is covered" and
+   "What is not covered" side by side. Plain text extraction reads across both columns and mixes cover
+   with exclusions. The app extracts each table row as one clause, keeping its cover and its exclusions
+   together, and treats only the text outside the tables as running prose.
+2. **One index per policy.** Each policy has its own FAISS index (local `all-MiniLM-L6-v2` embeddings),
+   so clauses from different contracts never mix in one answer.
+3. **Several searches per claim:** the claim itself, the claim rewritten into policy wording by Gemini, then exclusions and conditions, then defined terms.
+   The clause that decides a claim is often an exclusion or a definition far from the cover
+   (for example "accidental damage" must be *sudden*, and much of the cover stops when the home is *unoccupied*).
+4. **Structured verdict.** Gemini 2.5 Flash checks cover → conditions → exclusions → definitions and returns
+   a verdict, reasoning, citations and missing information in a fixed schema.
+5. **Citation check.** Every quote is compared with the retrieved policy text. A quote that is not found
+   word for word is flagged in the interface.
 
-1. Upload an insurance policy PDF.
-2. Extract the text and tables from the PDF.
-3. Clean the extracted content and keep the page information.
-4. Split the content into chunks.
-5. Generate embeddings and store them in FAISS.
-6. Enter a question about the policy.
-7. Retrieve relevant content and send it to Gemini to generate an answer.
-8. Display the answer with its source and page reference.
-
-## How to Run the Project
-
-### 1. Install the required packages
+## Run locally
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-### 2. Configure the Gemini API key
-
-Create a `.env` file in the project folder and add your API key:
+Create a `.env` file with your Gemini API key (never commit it):
 
 ```text
 GOOGLE_API_KEY=your_gemini_api_key_here
 ```
 
-Replace the placeholder with your actual key. Do not upload the `.env` file to GitHub.
-
-### 3. Start the application
-
 ```bash
 python -m streamlit run app.py
 ```
 
-Open the local URL displayed in the terminal.
+You can also upload your own policy PDFs from the app.
 
-## Sample Test
+## Files
 
-**Question:** What is the fire damage coverage?
+- `rag.py`: downloading, parsing, indexing, retrieval and the structured verdict
+- `app.py`: Streamlit interface
 
-The application retrieves relevant information from the uploaded policy and generates an answer with a source filename and page number.
+## Limits
 
-I am using a synthetic insurance policy for testing. The policy details are fictional and are not intended to represent an actual insurance product.
+- Some cover depends on options in the customer's policy schedule (for example accidental damage
+  cover), which the app does not have. It says so when this matters.
+- The policy is UK English. Scanned PDFs would need OCR first.
+- There is no automated evaluation yet. The next step is a set of claims with expected verdicts, run on every change.
 
-## Next Steps
+## Scaling to hundreds of contracts
 
-I plan to improve the project further by:
-
-- Testing how accurately the application retrieves information from tables.
-- Comparing different chunk sizes and overlap settings.
-- Testing more questions and checking the answers against the original PDF.
-- Improving the handling of complex tables and scanned documents.
-- Checking that answers and citations are supported by the retrieved content.
+Searching raw text works for a few policies. For hundreds, I would extract each policy once into a
+structured table (cover, conditions, exclusions, limits, defined terms, page), query that table first to
+find the applicable clauses, and use the raw text only to quote them. New contracts are then compared
+field by field instead of re-reading whole documents.
 
 ## Author
 
