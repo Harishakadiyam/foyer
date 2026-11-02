@@ -7,7 +7,7 @@ The verdict matters less than the justification. When the policy is ambiguous, o
 fact the policy depends on, the app answers UNCLEAR and says what information would settle it.
 A substantiated "I don't know" is more useful than a confident answer without sources.
 
-**Live demo:** [add your Streamlit link here]
+**Live demo:** https://insurance-claim-checker.streamlit.app
 
 ## Test cases
 
@@ -15,15 +15,19 @@ The app is tested on a real, publicly published policy:
 [RSA Home Contents Insurance policy wording (UK, 2025)](https://static.rsagroup.com/rsa/tenants-contents-insurance/NHC-wording.pdf).
 The PDF is downloaded from the insurer's site on first run and is not stored in this repository.
 
-| Claim | Verdict | Why |
-|---|---|---|
-| My bike was stolen from the building's communal storage area, which wasn't locked. | UNCLEAR | Optional bicycle cover (p. 46) only covers theft in a public place if the bike was locked to something fixed. The policy doesn't define "public place", and a shared storage room isn't clearly part of "home" as defined on p. 11, which decides whether the main theft cover (p. 25) applies. |
-| A candle left on the garden table during a holiday melted in the heat and damaged the table. | UNCLEAR | Only accidental damage cover could apply, and it requires the optional Simple+ cover in the schedule (p. 42). "Contents in the open" (p. 28) doesn't cover heat damage. Whether melting counts as "sudden" accidental damage (p. 9) or gradual damage is debatable. |
+| Claim                                                                                        | Verdict | Why                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| My bike was stolen from the building's communal storage area, which wasn't locked.           | UNCLEAR | Optional bicycle cover (p. 46) only covers theft in a public place if the bike was locked to something fixed. The policy doesn't define "public place", and a shared storage room isn't clearly part of "home" as defined on p. 11, which decides whether the main theft cover (p. 25) applies. |
+| A candle left on the garden table during a holiday melted in the heat and damaged the table. | UNCLEAR | Only accidental damage cover could apply, and it requires the optional Simple+ cover in the schedule (p. 42). "Contents in the open" (p. 28) doesn't cover heat damage. Whether melting counts as "sudden" accidental damage (p. 9) or gradual damage is debatable.                             |
 
 ## What I learned while testing
 
 - The policy prints cover and exclusions in two columns. Plain text extraction mixed them, so I extract each table row as one clause.
 - An early version applied an exclusion for credit cards (p. 40) to the bike claim. I now label every exclusion with the cover item it belongs to, and rewrite each claim into policy wording before searching so the right base cover is found.
+- On the deployed app, the same claims once came back as confident NOT COVERED answers built on stretched
+  readings (a communal storage room treated as a "storage facility building"; a melting candle treated as
+  "normal use or ageing"). A prompt alone did not prevent this, so a verdict that rests on assumptions is
+  now downgraded to UNCLEAR in code.
 
 ## How it works
 
@@ -38,7 +42,10 @@ The PDF is downloaded from the insurer's site on first run and is not stored in 
    (for example "accidental damage" must be *sudden*, and much of the cover stops when the home is *unoccupied*).
 4. **Structured verdict.** Gemini 2.5 Flash checks cover → conditions → exclusions → definitions and returns
    a verdict, reasoning, citations and missing information in a fixed schema.
-5. **Citation check.** Every quote is compared with the retrieved policy text. A quote that is not found
+5. **Assumptions force UNCLEAR.** The model must list every fact it assumed and every reading of
+   the wording that could go the other way. If it lists any, the code (not the prompt) turns the
+   verdict into UNCLEAR and shows those assumptions to the user.
+6. **Citation check.** Every quote is compared with the retrieved policy text. A quote that is not found
    word for word is flagged in the interface.
 
 ## Run locally

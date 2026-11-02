@@ -83,6 +83,9 @@ if st.button("Check coverage", type="primary"):
     colour = {"COVERED": "green", "NOT COVERED": "red", "UNCLEAR": "orange"}[result.verdict]
     st.markdown(f"## :{colour}[{result.verdict}]")
     st.write(result.reasoning)
+    if result.assumptions:
+        st.warning("**Assumptions behind this answer:**\n" +
+                   "\n".join(f"- {a}" for a in result.assumptions))
     if result.missing_info:
         st.info(f"**What would change the answer:** {result.missing_info}")
 
